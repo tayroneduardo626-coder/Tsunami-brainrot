@@ -1,0 +1,278 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+
+-- Configuration
+local TixSettings = {
+    Sticky = false,
+    WallCheck = true, -- Defaulted to true per your request
+    TeamCheck = false,
+    ESP = false,
+    Tracers = false,
+    RainbowStyle = false,
+    NPCs = false,
+    FOV = 150,
+    CircleVis = false
+}
+
+-- THEME COLORS
+local PrimaryRed = Color3.fromRGB(255, 0, 0)
+local DarkGreyBlack = Color3.fromRGB(15, 15, 17) -- "More black than grey"
+local OffText = Color3.fromRGB(160, 160, 160)
+local DarkBtn = Color3.fromRGB(25, 25, 27)
+
+local function getRainbow()
+    return Color3.fromHSV(tick() % 5 / 5, 0.7, 1)
+end
+
+-- Drawings
+local Circle = Drawing.new("Circle")
+Circle.Visible = false
+Circle.Thickness = 2
+Circle.NumSides = 64
+Circle.Radius = TixSettings.FOV
+Circle.Filled = false
+
+local visualCache = {}
+
+-- UI Setup
+local TixUI = Instance.new("ScreenGui")
+TixUI.Name = "EZ_AIM_V1"
+TixUI.Parent = gethui and gethui() or game:GetService("CoreGui")
+TixUI.ResetOnSpawn = false
+
+-- Toggle Icon
+local TogglePanel = Instance.new("Frame", TixUI)
+TogglePanel.Size = UDim2.new(0, 45, 0, 45)
+TogglePanel.Position = UDim2.new(0, 20, 0, 20)
+TogglePanel.BackgroundColor3 = DarkGreyBlack
+TogglePanel.Active = true
+TogglePanel.Draggable = true
+Instance.new("UICorner", TogglePanel)
+local ToggleStroke = Instance.new("UIStroke", TogglePanel)
+ToggleStroke.Thickness = 2
+ToggleStroke.Color = PrimaryRed
+
+local ToggleBtn = Instance.new("TextButton", TogglePanel)
+ToggleBtn.Size = UDim2.new(1, 0, 1, 0)
+ToggleBtn.BackgroundTransparency = 1
+ToggleBtn.Text = "EZ"
+ToggleBtn.Font = Enum.Font.GothamBold
+ToggleBtn.TextColor3 = PrimaryRed
+ToggleBtn.TextSize = 18
+
+-- MAIN FRAME
+local Main = Instance.new("Frame", TixUI)
+local VisiblePos = UDim2.new(0.5, -180, 0.5, -140)
+local HiddenPos = UDim2.new(0.5, -180, 1.2, 0)
+Main.Size = UDim2.new(0, 360, 0, 280) 
+Main.Position = HiddenPos
+Main.BackgroundColor3 = DarkGreyBlack
+Main.Visible = false
+Main.Active = true
+Main.Draggable = true
+Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 10)
+
+local MainStroke = Instance.new("UIStroke", Main)
+MainStroke.Thickness = 2
+MainStroke.Color = PrimaryRed
+
+-- TITLE
+local Title = Instance.new("TextLabel", Main)
+Title.Size = UDim2.new(1, 0, 0, 50)
+Title.Text = "EZ AIM"
+Title.Font = Enum.Font.GothamBold
+Title.TextSize = 24
+Title.BackgroundTransparency = 1
+Title.TextColor3 = PrimaryRed
+
+local CloseBtn = Instance.new("TextButton", Main)
+CloseBtn.Size = UDim2.new(0, 30, 0, 30)
+CloseBtn.Position = UDim2.new(1, -35, 0, 10)
+CloseBtn.BackgroundTransparency = 1
+CloseBtn.Text = "×"
+CloseBtn.Font = Enum.Font.GothamBold
+CloseBtn.TextColor3 = PrimaryRed
+CloseBtn.TextSize = 25
+
+-- OPEN/CLOSE LOGIC
+ToggleBtn.MouseButton1Click:Connect(function()
+    Main.Visible = true
+    TogglePanel.Visible = false
+    Main:TweenPosition(VisiblePos, "Out", "Quart", 0.5, true)
+end)
+
+CloseBtn.MouseButton1Click:Connect(function()
+    Main:TweenPosition(HiddenPos, "In", "Quart", 0.4, true, function()
+        Main.Visible = false
+        TogglePanel.Visible = true
+    end)
+end)
+
+-- SCROLL AREA
+local Scroll = Instance.new("ScrollingFrame", Main)
+Scroll.Size = UDim2.new(1, -20, 1, -70)
+Scroll.Position = UDim2.new(0, 10, 0, 60)
+Scroll.BackgroundTransparency = 1
+Scroll.CanvasSize = UDim2.new(0, 0, 2.2, 0)
+Scroll.ScrollBarThickness = 2
+Scroll.ScrollBarImageColor3 = PrimaryRed
+
+local UIList = Instance.new("UIListLayout", Scroll)
+UIList.Padding = UDim.new(0, 6)
+
+local function AddToggle(text, settingKey)
+    local btn = Instance.new("TextButton", Scroll)
+    btn.Size = UDim2.new(1, -5, 0, 42)
+    btn.BackgroundColor3 = DarkBtn
+    btn.Text = ""
+    btn.AutoButtonColor = false
+    Instance.new("UICorner", btn)
+    
+    local BStroke = Instance.new("UIStroke", btn)
+    BStroke.Thickness = 1
+    BStroke.Color = PrimaryRed
+    BStroke.Transparency = 0.8 -- Subtle border for buttons
+
+    local Label = Instance.new("TextLabel", btn)
+    Label.Size = UDim2.new(1, -60, 1, 0)
+    Label.Position = UDim2.new(0, 15, 0, 0)
+    Label.BackgroundTransparency = 1
+    Label.Text = text
+    Label.Font = Enum.Font.GothamBold
+    Label.TextColor3 = PrimaryRed -- All text red per request
+    Label.TextSize = 14
+    Label.TextXAlignment = Enum.TextXAlignment.Left
+
+    local Status = Instance.new("TextLabel", btn)
+    Status.Size = UDim2.new(0, 40, 1, 0)
+    Status.Position = UDim2.new(1, -55, 0, 0)
+    Status.BackgroundTransparency = 1
+    Status.Text = "OFF"
+    Status.Font = Enum.Font.GothamBold
+    Status.TextColor3 = OffText
+    Status.TextSize = 13
+    Status.TextXAlignment = Enum.TextXAlignment.Right
+
+    btn.MouseButton1Click:Connect(function()
+        TixSettings[settingKey] = not TixSettings[settingKey]
+        local s = TixSettings[settingKey]
+        
+        local targetColor = s and Color3.fromRGB(45, 10, 10) or DarkBtn
+        TweenService:Create(btn, TweenInfo.new(0.3), {BackgroundColor3 = targetColor}):Play()
+        
+        Status.Text = s and "ON" or "OFF"
+        Status.TextColor3 = s and PrimaryRed or OffText
+        if settingKey == "CircleVis" then Circle.Visible = s end
+    end)
+    return {Label = Label, Status = Status, Active = function() return TixSettings[settingKey] end}
+end
+
+local indicators = {
+    Sticky = AddToggle("Sticky Aim", "Sticky"),
+    Walls = AddToggle("Wall Check", "WallCheck"),
+    Teams = AddToggle("Team Check", "TeamCheck"),
+    ESP = AddToggle("Visual ESP", "ESP"),
+    Tracers = AddToggle("Tracers", "Tracers"),
+    NPCs = AddToggle("Include NPCs", "NPCs"),
+    Rain = AddToggle("Rainbow Mode", "RainbowStyle"),
+    FOV = AddToggle("Show FOV", "CircleVis")
+}
+
+-- Wall Check Implementation
+local function isVisible(targetPart)
+    if not TixSettings.WallCheck then return true end
+    local castPoints = {targetPart.Position}
+    local ignoreList = {LocalPlayer.Character, Camera}
+    local ray = Ray.new(Camera.CFrame.Position, (targetPart.Position - Camera.CFrame.Position).Unit * 1000)
+    local hit, pos = workspace:FindPartOnRayWithIgnoreList(ray, ignoreList)
+    
+    if hit and hit:IsDescendantOf(targetPart.Parent) then
+        return true
+    end
+    return false
+end
+
+-- Targeting Logic
+local function getClosest()
+    local target, shortestFOV = nil, TixSettings.FOV
+    local potentials = {}
+    
+    for _,v in pairs(Players:GetPlayers()) do
+        if v ~= LocalPlayer and v.Character and v.Character:FindFirstChild("Head") and v.Character:FindFirstChild("Humanoid") and v.Character.Humanoid.Health > 0 then
+            if TixSettings.TeamCheck and v.Team == LocalPlayer.Team then continue end
+            table.insert(potentials, v.Character.Head)
+        end
+    end
+    
+    if TixSettings.NPCs then
+        for _,v in pairs(workspace:GetDescendants()) do
+            if v:IsA("Model") and v:FindFirstChild("Humanoid") and v:FindFirstChild("Head") and v.Humanoid.Health > 0 then
+                if not Players:GetPlayerFromCharacter(v) then table.insert(potentials, v.Head) end
+            end
+        end
+    end
+
+    for _, head in pairs(potentials) do
+        local pos, vis = Camera:WorldToViewportPoint(head.Position)
+        if vis and isVisible(head) then
+            local mag = (Vector2.new(pos.X, pos.Y) - Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)).Magnitude
+            if mag < shortestFOV then 
+                target = head 
+                shortestFOV = mag 
+            end
+        end
+    end
+    return target
+end
+
+-- Main Loop
+RunService.RenderStepped:Connect(function()
+    local accent = TixSettings.RainbowStyle and getRainbow() or PrimaryRed
+    
+    Circle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+    Circle.Color = accent
+    MainStroke.Color = accent
+    ToggleStroke.Color = accent
+    Title.TextColor3 = accent
+
+    if TixSettings.Sticky then
+        local lock = getClosest()
+        if lock then 
+            Camera.CFrame = CFrame.new(Camera.CFrame.Position, lock.Position) 
+        end
+    end
+
+    -- Visual Processing (ESP/Tracers)
+    local targets = {}
+    for _, p in pairs(Players:GetPlayers()) do if p ~= LocalPlayer and p.Character then table.insert(targets, p.Character) end end
+    
+    for _, char in pairs(targets) do
+        if not visualCache[char] then
+            visualCache[char] = {Line = Drawing.new("Line"), High = Instance.new("Highlight", TixUI)}
+        end
+        local visual = visualCache[char]
+        local head = char:FindFirstChild("Head")
+        local hum = char:FindFirstChild("Humanoid")
+        local isAlive = head and hum and hum.Health > 0
+        
+        if TixSettings.Tracers and isAlive then
+            local pos, vis = Camera:WorldToViewportPoint(head.Position)
+            if vis then
+                visual.Line.Visible = true
+                visual.Line.From = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y)
+                visual.Line.To = Vector2.new(pos.X, pos.Y)
+                visual.Line.Color = accent
+                visual.Line.Thickness = 1.5
+            else visual.Line.Visible = false end
+        else visual.Line.Visible = false end
+
+        visual.High.Enabled = TixSettings.ESP and isAlive
+        visual.High.Adornee = char
+        visual.High.FillColor = accent
+        visual.High.OutlineColor = Color3.new(1,1,1)
+    end
+
+end)
